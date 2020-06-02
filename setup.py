@@ -16,6 +16,7 @@ setup(
         'parsel',
         'psycopg2-binary',
         'python-dateutil',
+        'PyYAML',
         'requests',
         'sentry-sdk',
     ],

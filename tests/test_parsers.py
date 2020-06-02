@@ -1,9 +1,11 @@
 import datetime
+import tempfile
+from contextlib import suppress
 
 from dateutil.tz import tzutc
 
 from brightsky.parsers import (
-    CurrentObservationsParser, get_parser, MOSMIXParser,
+    CurrentObservationsParser, get_parser, MOSMIXParser, ObservationsParser,
     PrecipitationObservationsParser, PressureObservationsParser,
     SunshineObservationsParser, TemperatureObservationsParser,
     WindObservationsParser)
@@ -159,6 +161,28 @@ def test_observations_parser_skips_rows_if_before_cutoff(data_dir):
         assert len(records) == 5
         assert records[-1]['timestamp'] == datetime.datetime(
             2018, 9, 15, 4, tzinfo=tzutc())
+
+
+IGNORED_VALUES = """
+some_url:
+  2018-09-15 00:00:
+    wind_direction: 80.
+"""
+
+
+def test_observations_parser_handles_ignored_values(data_dir):
+    p = WindObservationsParser(
+        url='some_url',
+        path=data_dir / 'observations_recent_FF_akt.zip')
+    with suppress(AttributeError):
+        del ObservationsParser._ignored_values
+    with tempfile.NamedTemporaryFile('w') as f:
+        f.write(IGNORED_VALUES)
+        f.flush()
+        with settings(IGNORED_VALUES_PATH=f.name):
+            records = list(p.parse())
+            assert records[0]['wind_direction'] is None
+            assert records[0]['wind_speed'] == 1.6
 
 
 def _test_parser(cls, path, first, last, count=10, first_idx=0, last_idx=-1):

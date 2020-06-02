@@ -5,6 +5,7 @@ from dateutil.tz import tzutc
 
 
 DATABASE_URL = 'postgres://localhost'
+IGNORED_VALUES_PATH = 'static/ignored_values.yml'
 KEEP_DOWNLOADS = False
 MIN_DATE = datetime.datetime(2010, 1, 1, tzinfo=tzutc())
 MAX_DATE = None

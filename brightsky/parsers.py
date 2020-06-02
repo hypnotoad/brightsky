@@ -8,6 +8,7 @@ import zipfile
 from contextlib import suppress
 
 import dateutil.parser
+import yaml
 from dateutil.tz import tzutc
 from parsel import Selector
 
@@ -226,6 +227,22 @@ class ObservationsParser(Parser):
     elements = {}
     converters = {}
 
+    @property
+    def _ignored_values(self):
+        if not hasattr(ObservationsParser, '_ignored_values'):
+            try:
+                with open(settings.IGNORED_VALUES_PATH) as f:
+                    ignored = yaml.safe_load(f)
+            except FileNotFoundError:
+                ignored = {}
+            for file_ignored in ignored.values():
+                for timestamp_str in list(file_ignored):
+                    timestamp = datetime.datetime.fromisoformat(
+                        timestamp_str).replace(tzinfo=tzutc())
+                    file_ignored[timestamp] = file_ignored.pop(timestamp_str)
+            ObservationsParser._ignored_values = ignored
+        return ObservationsParser._ignored_values.get(self.url, {})
+
     def should_skip(self):
         if (m := re.search(r'_(\d{8})_(\d{8})_hist\.zip$', str(self.path))):
             end_date = datetime.datetime.strptime(
@@ -245,6 +262,7 @@ class ObservationsParser(Parser):
             observation_type = self.parse_observation_type()
             lat_lon_history = self.parse_lat_lon_history(zf, station_id)
             for record in self.parse_records(zf, lat_lon_history):
+                self.sanitize_record(record)
                 yield {
                     'observation_type': observation_type,
                     'station_id': station_id,
@@ -325,6 +343,17 @@ class ObservationsParser(Parser):
             if elements[element] is not None:
                 elements[element] = converter(elements[element])
         return elements
+
+    def sanitize_record(self, record):
+        ignores = self.ignored_values.get(record['timestamp'], {})
+        for element, ignored_value in ignores.items():
+            if record[element] == ignored_value:
+                record[element] = None
+            else:
+                self.logger.warning(
+                    "Ignored value '%s' of element '%s' for %s at %s no "
+                    "longer exists",
+                    ignored_value, element, self.url, record['timestamp'])
 
 
 class TemperatureObservationsParser(ObservationsParser):
